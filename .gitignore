@@ -1,0 +1,5 @@
+.env
+.DS_Store
+uv.lock
+latest_summary.md
+__pycache__/

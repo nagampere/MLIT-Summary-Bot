@@ -1,0 +1,56 @@
+name: MLIT Summary Bot
+
+on:
+  # 平日の朝9時に実行
+  schedule:
+    - cron: "0 0 * * 1-5"
+  # 手動トリガーも可能にしておく
+  workflow_dispatch:
+
+jobs:
+  summarize:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Run MLIT summary
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
+          
+          # MLIT
+          MLIT_PRESS_RSS: ${{ vars.MLIT_PRESS_RSS }}
+          MLIT_DAYS_BACK: ${{ vars.MLIT_DAYS_BACK }}
+          # Slack
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_CHANNEL_ID: ${{ vars.SLACK_CHANNEL_ID }}
+          # Email (必要なら設定)
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          SMTP_FROM: ${{ secrets.SMTP_FROM }}
+          SMTP_TO: ${{ secrets.SMTP_TO }}
+          # 配信方法: slack / email / both
+          DELIVERY: slack 
+        run: |
+          uv run python src/mlit_summary.py
+
+      - name: Upload summary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: latest_summary
+          path: latest_summary.md
