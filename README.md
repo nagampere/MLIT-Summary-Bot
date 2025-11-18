@@ -21,12 +21,12 @@
 このプロジェクトでは依存管理に `uv` を使うことを推奨します。CI（GitHub Actions）でも `uv sync --frozen` を使って依存をインストールしています。
 
 ローカルでの手順の例:
+※[uv のインストール](https://docs.astral.sh/uv/getting-started/installation/#installation-methods)
 
 ```bash
-# 1) uv のインストール（推奨: pipx）
-pip install --user pipx
-pipx ensurepath
-pipx install uv
+# 1) uv が導入されていない場合
+$ curl -LsSf https://astral.sh/uv/install.sh | sh
+
 
 # 2) プロジェクトの依存を同期（pyproject.toml を参照してインストール）
 uv sync
