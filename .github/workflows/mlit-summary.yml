@@ -24,7 +24,7 @@ jobs:
         run: pip install uv
 
       - name: Install dependencies
-        run: uv sync --frozen
+        run: uv sync
 
       - name: Run MLIT summary
         env:
