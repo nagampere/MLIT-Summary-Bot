@@ -54,7 +54,7 @@ jobs:
             SMTP_FROM: ${{ secrets.SMTP_FROM }}
             SMTP_TO: ${{ secrets.SMTP_TO }}
             # 配信方法: slack / email / both
-            DELIVERY: ${{ secrets.DELIVERY }} | 
+            DELIVERY: ${{ secrets.DELIVERY }}
         run: |
           uv run python src/mlit_summary.py
 
