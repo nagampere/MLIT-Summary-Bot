@@ -1,7 +1,7 @@
 name: MLIT Summary Bot
 
 on:
-  # 平日の朝9時に実行
+  # 日本時間の平日の朝9時に実行
   schedule:
     - cron: "0 0 * * 1-5"
   # 手動トリガーも可能にしておく
@@ -28,24 +28,33 @@ jobs:
 
       - name: Run MLIT summary
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
-          
-          # MLIT
-          MLIT_PRESS_RSS: ${{ vars.MLIT_PRESS_RSS }}
-          MLIT_DAYS_BACK: ${{ vars.MLIT_DAYS_BACK }}
-          # Slack
-          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
-          SLACK_CHANNEL_ID: ${{ vars.SLACK_CHANNEL_ID }}
-          # Email (必要なら設定)
-          SMTP_HOST: ${{ secrets.SMTP_HOST }}
-          SMTP_PORT: ${{ secrets.SMTP_PORT }}
-          SMTP_USER: ${{ secrets.SMTP_USER }}
-          SMTP_PASS: ${{ secrets.SMTP_PASS }}
-          SMTP_FROM: ${{ secrets.SMTP_FROM }}
-          SMTP_TO: ${{ secrets.SMTP_TO }}
-          # 配信方法: slack / email / both
-          DELIVERY: slack 
+            AI_PROVIDER: ${{ secrets.AI_PROVIDER }}
+            # OpenAI
+            OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+            OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }} or 'gpt-4.1-mini'
+            # Claude
+            ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+            ANTHROPIC_MODEL: ${{ secrets.ANTHROPIC_MODEL }} or 'claude-3-5-sonnet-latest'
+            # Gemini
+            GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+            GEMINI_MODEL: ${{ secrets.GEMINI_MODEL }} or 'gemini-2.5-flash'
+            # MLIT
+            MLIT_PRESS_RSS: ${{ secrets.MLIT_PRESS_RSS }}
+            MLIT_DAYS_BACK: ${{ secrets.MLIT_DAYS_BACK }}
+            # Slack
+            SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+            SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
+            SLACK_DEBUG_MODE: ${{ secrets.SLACK_DEBUG_MODE }} or 'false'
+            SLACK_DEBUG_CHANNEL_ID: ${{ secrets.SLACK_DEBUG_CHANNEL_ID }}
+            # Email (必要なら設定)
+            SMTP_HOST: ${{ secrets.SMTP_HOST }}
+            SMTP_PORT: ${{ secrets.SMTP_PORT }}
+            SMTP_USER: ${{ secrets.SMTP_USER }}
+            SMTP_PASS: ${{ secrets.SMTP_PASS }}
+            SMTP_FROM: ${{ secrets.SMTP_FROM }}
+            SMTP_TO: ${{ secrets.SMTP_TO }}
+            # 配信方法: slack / email / both
+            DELIVERY: ${{ secrets.DELIVERY }} or 'slack'
         run: |
           uv run python src/mlit_summary.py
 
