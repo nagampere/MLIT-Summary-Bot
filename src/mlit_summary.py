@@ -25,6 +25,20 @@ MLIT_PRESS_RSS_DEFAULT = "https://www.mlit.go.jp/pressrelease.rdf"
 MLIT_DAIJIN_LIST_URL = "https://www.mlit.go.jp/report/interview/daijin.html"
 
 #%%
+def get_fetch_date(days_back: int = 1) -> dt.date:
+    """指定日前の日付を JST で取得"""
+    fetch_date = dt.datetime.now(JST).date() - dt.timedelta(days=days_back)
+    # 土曜日の場合は金曜日に調整
+    if fetch_date.weekday() == 5:
+        return fetch_date - dt.timedelta(days=1)
+    # 日曜日の場合は金曜日に調整
+    if fetch_date.weekday() == 6:
+        return fetch_date - dt.timedelta(days=2)
+
+    return fetch_date
+
+
+#%%
 def fetch_soup(url: str, timeout: int = 20) -> BeautifulSoup:
     """Fetch URL and return a BeautifulSoup object with correct encoding.
 
@@ -65,7 +79,7 @@ def fetch_press_releases(days_back: int = 1, limit: int = 20):
     feed_url = os.getenv("MLIT_PRESS_RSS", MLIT_PRESS_RSS_DEFAULT)
     d = feedparser.parse(feed_url)
 
-    fetch_date = dt.datetime.now(JST).date() - dt.timedelta(days=days_back)
+    fetch_date = get_fetch_date(days_back=days_back)
     items = []
 
     for e in d.entries[:limit]:
@@ -168,7 +182,7 @@ def fetch_minister_interviews(days_back: int = 1, max_items: int = 5):
     """大臣記者会見一覧から直近の会見を取得し、本文をスクレイピング"""
     soup = fetch_soup(MLIT_DAIJIN_LIST_URL)
 
-    fetch_date = dt.datetime.now(JST).date() - dt.timedelta(days=days_back)
+    fetch_date = get_fetch_date(days_back=days_back)
     fetch_date_str = fetch_date.strftime("%y%m%d")
     items = []
 
@@ -228,7 +242,7 @@ def build_prompt(interviews, press_releases, days_back: int = 1) -> str:
         )
 
     source_text = "\n\n".join(lines)
-    fetch_date = dt.datetime.now(JST).date() - dt.timedelta(days=days_back)
+    fetch_date = get_fetch_date(days_back=days_back)
 
     prompt = f"""
 あなたは日本の行政情報に詳しいアシスタントです。
@@ -279,7 +293,7 @@ def summarize_with_ai(interviews, press_releases, days_back: int = 1):
     elif provider == "gemini":
         # Gemini
         api_key = os.getenv("GEMINI_API_KEY")
-        model = os.getenv("GEMINI_MODEL", "gemini-1.5-pro")
+        model = os.getenv("GEMINI_MODEL", "gemini-2.5-pro")
         used_model = f"Gemini ({model})"
 
         genai.configure(api_key=api_key)
