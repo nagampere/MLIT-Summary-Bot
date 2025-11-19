@@ -1,9 +1,9 @@
 name: MLIT Summary Bot
 
 on:
-  # 日本時間の平日の12時に実行
+  # 日本時間の平日の8時に実行
   schedule:
-    - cron: "0 3 * * 1-5"
+    - cron: "0 23 * * 1-5"
   # 手動トリガーも可能にしておく
   workflow_dispatch:
 
