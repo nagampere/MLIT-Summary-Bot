@@ -1,3 +1,4 @@
+#%%
 import os
 import re
 import smtplib
@@ -23,41 +24,97 @@ JST = zoneinfo.ZoneInfo("Asia/Tokyo")
 MLIT_PRESS_RSS_DEFAULT = "https://www.mlit.go.jp/pressrelease.rdf"
 MLIT_DAIJIN_LIST_URL = "https://www.mlit.go.jp/report/interview/daijin.html"
 
+#%%
+def fetch_soup(url: str, timeout: int = 20) -> BeautifulSoup:
+    """Fetch URL and return a BeautifulSoup object with correct encoding.
 
+    This function tries to determine the correct charset from the HTTP
+    Content-Type header first. If none is found, it falls back to
+    requests' apparent_encoding. It decodes the raw content and passes
+    the resulting text to BeautifulSoup to avoid mojibake.
+    """
+    resp = requests.get(url, timeout=timeout)
+    resp.raise_for_status()
+
+    # Try to get charset from header
+    content_type = resp.headers.get("content-type", "")
+    m = re.search(r"charset=([^\s;]+)", content_type, flags=re.I)
+    encoding = None
+    if m:
+        encoding = m.group(1).strip().strip('"')
+
+    # Fallback to requests apparent_encoding (uses charset_normalizer/chardet)
+    if not encoding:
+        encoding = getattr(resp, "apparent_encoding", None)
+
+    # As a final fallback, assume utf-8
+    if not encoding:
+        encoding = "utf-8"
+
+    try:
+        text = resp.content.decode(encoding, errors="replace")
+    except Exception:
+        # If decoding fails for any reason, fall back to requests.text
+        text = resp.text
+
+    return BeautifulSoup(text, "html.parser")
+
+#%%
 def fetch_press_releases(days_back: int = 1, limit: int = 20):
     """国交省プレスリリースRSSから直近の項目を取得"""
     feed_url = os.getenv("MLIT_PRESS_RSS", MLIT_PRESS_RSS_DEFAULT)
     d = feedparser.parse(feed_url)
 
-    today = dt.datetime.now(JST).date()
+    fetch_date = dt.datetime.now(JST).date() - dt.timedelta(days=days_back)
     items = []
 
     for e in d.entries[:limit]:
         pub_date = None
         if getattr(e, "published_parsed", None):
             t = e.published_parsed
-            pub_date = dt.date(t.tm_year, t.tm_mon, t.tm_mday)
+            # convert struct_time (assumed UTC) to JST-aware datetime, then back to struct_time
+            dt_utc = dt.datetime(
+                t.tm_year, t.tm_mon, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec, tzinfo=dt.timezone.utc
+            )
+            pub_date = dt_utc.astimezone(JST).date()
         elif getattr(e, "updated_parsed", None):
             t = e.updated_parsed
-            pub_date = dt.date(t.tm_year, t.tm_mon, t.tm_mday)
+            # convert struct_time (assumed UTC) to JST-aware datetime, then back to struct_time
+            dt_utc = dt.datetime(
+                t.tm_year, t.tm_mon, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec, tzinfo=dt.timezone.utc
+            )
+            pub_date = dt_utc.astimezone(JST).date()
+        elif getattr(e, "dc:date", None):
+            t = e.dc_date_parsed
+            # convert struct_time (assumed UTC) to JST-aware datetime, then back to struct_time
+            dt_utc = dt.datetime(
+                t.tm_year, t.tm_mon, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec, tzinfo=dt.timezone.utc
+            )
+            pub_date = dt_utc.astimezone(JST).date()
+            print(f"Entry dc:date date: {pub_date} for {e.title}")
         else:
-            # 日付が取れない場合はとりあえず今日扱い
-            pub_date = today
+            # 日付が取れない場合はとりあえず昨日扱い
+            pub_date = fetch_date
 
-        if (today - pub_date).days <= days_back:
+        if fetch_date == pub_date:
+            # ページ内テキストをまとめて取得（雑だが汎用）
+            detail_url = e.link
+            detail_soup = fetch_soup(detail_url)
+            text = detail_soup.get_text("\n", strip=True)
+            body = textwrap.shorten(text, width=8000, placeholder="...")
             items.append(
                 {
                     "kind": "報道発表",
                     "title": e.title,
                     "link": e.link,
                     "date": pub_date.isoformat(),
-                    "raw_summary": getattr(e, "summary", ""),
+                    "content": body,
                 }
             )
 
     return items
 
-
+#%%
 def _parse_japanese_date(text: str):
     """『2025年11月18日』形式から date を抜く"""
     m = re.search(r"(\d{4})年\s*(\d{1,2})月\s*(\d{1,2})日", text)
@@ -66,7 +123,7 @@ def _parse_japanese_date(text: str):
     y, mth, d = map(int, m.groups())
     return dt.date(y, mth, d)
 
-
+#%%
 def _convert_md_to_slack(md: str) -> str:
     """簡易的に GitHub スタイルの Markdown を Slack の mrkdwn 表現に変換する。
 
@@ -87,7 +144,7 @@ def _convert_md_to_slack(md: str) -> str:
     md_tmp = re.sub(r"```[\s\S]*?```", _code_repl, md)
 
     # bold **text** -> *text*
-    md_tmp = re.sub(r"\*\*(.+?)\*\*", r"*\1*", md_tmp)
+    md_tmp = re.sub(r"\*\*(.+?)\*\*", r"*\1* ", md_tmp)
 
     # headings: lines starting with # -> make bold and remove leading hashes
     def _hdr(m):
@@ -106,15 +163,13 @@ def _convert_md_to_slack(md: str) -> str:
 
     return md_tmp
 
-
+#%%
 def fetch_minister_interviews(days_back: int = 1, max_items: int = 5):
     """大臣記者会見一覧から直近の会見を取得し、本文をスクレイピング"""
-    res = requests.get(MLIT_DAIJIN_LIST_URL, timeout=20)
-    res.raise_for_status()
-    soup = BeautifulSoup(res.text, "html.parser")
+    soup = fetch_soup(MLIT_DAIJIN_LIST_URL)
 
-    today = dt.datetime.now(JST).date()
-    today_str = today.strftime("%y%m%d")
+    fetch_date = dt.datetime.now(JST).date() - dt.timedelta(days=days_back)
+    fetch_date_str = fetch_date.strftime("%y%m%d")
     items = []
 
     # シンプルに一覧ページ内のリンクを上から順にたどる
@@ -123,21 +178,18 @@ def fetch_minister_interviews(days_back: int = 1, max_items: int = 5):
         # 大臣会見一覧ページでは相対パスで 'daijin...' のようなリンクが来るが、
         # 絶対パス '/report/interview/daijin251118.html' のような場合もあるため
         # 特定の日付ページ（daijin251118.html）を含むリンクも許可する。
-        if f"daijin{today_str}.html" not in href and not href.startswith("daijin"):
+        if f"daijin{fetch_date_str}.html" not in href and not href.startswith("daijin"):
             continue
         detail_url = requests.compat.urljoin(MLIT_DAIJIN_LIST_URL, href)
         print(f"Fetching interview detail: {detail_url}")
-
-        detail_res = requests.get(detail_url, timeout=20)
-        detail_res.raise_for_status()
-        detail_soup = BeautifulSoup(detail_res.text, "html.parser")
+        detail_soup = fetch_soup(detail_url)
 
         # ページ内テキストをまとめて取得（雑だが汎用）
         text = detail_soup.get_text("\n", strip=True)
         # 冒頭付近から日付をパース
-        pub_date = _parse_japanese_date(text) or today
-        
-        if (today - pub_date).days > days_back:
+        pub_date = _parse_japanese_date(text) or fetch_date
+
+        if fetch_date != pub_date:
             continue
 
         # 本文テキストは長くなりすぎるので適度にトリム
@@ -158,8 +210,8 @@ def fetch_minister_interviews(days_back: int = 1, max_items: int = 5):
 
     return items
 
-
-def build_prompt(interviews, press_releases):
+#%%
+def build_prompt(interviews, press_releases, days_back: int = 1) -> str:
     """ChatGPT用プロンプトを組み立て"""
     lines = []
     for item in interviews:
@@ -169,13 +221,14 @@ def build_prompt(interviews, press_releases):
         )
     for item in press_releases:
         # RSSの summary だけでもそこそこ要旨が分かる
-        raw = item.get("raw_summary") or ""
+        raw = item.get("content") or ""
         lines.append(
             f"[報道発表] {item['date']} {item['title']} ({item['link']})\n"
-            f"概要（RSS）:\n{raw}\n"
+            f"本文抜粋:\n{raw}\n"
         )
 
     source_text = "\n\n".join(lines)
+    fetch_date = dt.datetime.now(JST).date() - dt.timedelta(days=days_back)
 
     prompt = f"""
 あなたは日本の行政情報に詳しいアシスタントです。
@@ -183,15 +236,17 @@ def build_prompt(interviews, press_releases):
 
 これらを読み、**日本語**で次のようなMarkdown要約を作成してください。
 
-- 全体の冒頭に「本日の国土交通省 大臣会見・報道発表サマリー（YYYY-MM-DD）」というタイトル
-- セクション1: 大臣記者会見の要点
+- 全体の冒頭に「本日の国土交通省 大臣会見・報道発表サマリー（{fetch_date}時点）」というタイトル。
+- セクションごとに1行の水平線（---）で区切る。
+- セクション1: ①大臣記者会見の要点
   - 箇条書きで 3〜8 行程度
   - 政策的に重要そうなポイントは太字で強調
-- セクション2: 報道発表資料の要点
-  - リスト形式で「・タイトル（所管局）: 要約」のように短く整理
-- セクション3: 研究・業務の仮想的なインプリケーション（任意）
+- セクション2: ②報道発表資料の要点
+  - リスト形式で「・タイトル（所管局）: 本文の要約」のように短く整理
+  - タイトルは20文字以内に要約し、太字で強調
+- セクション3: ③業務・投資・研究のインプリケーション
   - 交通計画・都市計画・インフラ投資などの観点から、
-    気づきやチェックした方が良さそうな点を2〜4行でコメント
+    気づき・考察・チェックした方が良さそうな点を2〜4行でコメント
 
 出力は**完全なMarkdownのみ**にしてください（余計な説明文は不要）。
 
@@ -200,10 +255,10 @@ def build_prompt(interviews, press_releases):
 """
     return textwrap.dedent(prompt).strip()
 
-
-def summarize_with_ai(interviews, press_releases):
+#%%
+def summarize_with_ai(interviews, press_releases, days_back: int = 1):
     provider = os.getenv("AI_PROVIDER", "openai").lower()
-    prompt = build_prompt(interviews, press_releases)
+    prompt = build_prompt(interviews, press_releases, days_back)
 
     used_model = None  # 後でMarkdownに明記する用
 
@@ -250,7 +305,7 @@ def summarize_with_ai(interviews, press_releases):
     footer = f"\n\n---\n_この要約は **{used_model}** を用いて自動生成されました。_"
     return summary_md.strip() + footer
 
-
+#%%
 def send_to_slack(markdown_text: str, debug: bool = False):
     """
     Slack SDK（slack_sdk.WebClient）を使ってメッセージ送信
@@ -329,7 +384,7 @@ def send_to_slack(markdown_text: str, debug: bool = False):
         print(f"SlackApiError: {e.response.get('error')}")
         raise
 
-
+#%%
 def send_email(markdown_text: str):
     """SMTP（例: Gmail）でメール送信"""
     host = os.getenv("SMTP_HOST")
@@ -366,7 +421,7 @@ def main():
         print("対象期間内のデータがありませんでした")
         return
 
-    markdown = summarize_with_ai(interviews, press)
+    markdown = summarize_with_ai(interviews, press, days_back=days_back)
 
     # 読み込んだ HTML ファイルの URL を明示的に付与して Slack/ファイルに埋め込む
     sources_lines = ["\n\n---\n## ソース"]
@@ -393,6 +448,6 @@ def main():
 
     print("完了しました")
 
-
+#%%
 if __name__ == "__main__":
     main()
