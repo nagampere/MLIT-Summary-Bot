@@ -31,20 +31,20 @@ jobs:
             AI_PROVIDER: ${{ secrets.AI_PROVIDER }}
             # OpenAI
             OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-            OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }} or 'gpt-4.1-mini'
+            OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
             # Claude
             ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-            ANTHROPIC_MODEL: ${{ secrets.ANTHROPIC_MODEL }} or 'claude-3-5-sonnet-latest'
+            ANTHROPIC_MODEL: ${{ secrets.ANTHROPIC_MODEL }}
             # Gemini
             GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-            GEMINI_MODEL: ${{ secrets.GEMINI_MODEL }} or 'gemini-2.5-flash'
+            GEMINI_MODEL: ${{ secrets.GEMINI_MODEL }}
             # MLIT
             MLIT_PRESS_RSS: ${{ secrets.MLIT_PRESS_RSS }}
             MLIT_DAYS_BACK: ${{ secrets.MLIT_DAYS_BACK }}
             # Slack
             SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
             SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
-            SLACK_DEBUG_MODE: ${{ secrets.SLACK_DEBUG_MODE }} or 'false'
+            SLACK_DEBUG_MODE: ${{ secrets.SLACK_DEBUG_MODE }}
             SLACK_DEBUG_CHANNEL_ID: ${{ secrets.SLACK_DEBUG_CHANNEL_ID }}
             # Email (必要なら設定)
             SMTP_HOST: ${{ secrets.SMTP_HOST }}
@@ -54,7 +54,7 @@ jobs:
             SMTP_FROM: ${{ secrets.SMTP_FROM }}
             SMTP_TO: ${{ secrets.SMTP_TO }}
             # 配信方法: slack / email / both
-            DELIVERY: ${{ secrets.DELIVERY }} or 'slack'
+            DELIVERY: ${{ secrets.DELIVERY }} | 
         run: |
           uv run python src/mlit_summary.py
 
