@@ -250,7 +250,7 @@ def build_prompt(interviews, press_releases, days_back: int = 1) -> str:
 
 これらを読み、**日本語**で次のようなMarkdown要約を作成してください。
 
-- 全体の冒頭に「本日の国土交通省 大臣会見・報道発表サマリー（{fetch_date}時点）」というタイトル。
+- 全体の冒頭に「*本日の国土交通省 大臣会見・報道発表サマリー* （{fetch_date}時点）」というタイトル。
 - セクションごとに1行の水平線（---）で区切る。
 - セクション1: ①大臣記者会見の要点
   - 箇条書きで 3〜8 行程度
@@ -260,7 +260,8 @@ def build_prompt(interviews, press_releases, days_back: int = 1) -> str:
   - タイトルは20文字以内に要約し、太字で強調
 - セクション3: ③業務・投資・研究のインプリケーション
   - 交通計画・都市計画・インフラ投資などの観点から、
-    気づき・考察・チェックした方が良さそうな点を2〜4行でコメント
+    気づき・考察・チェックした方が良さそうな点を2〜4つの箇条書きで示す
+  - 1つあたり30〜40文字程度で簡潔にまとめる。
 
 出力は**完全なMarkdownのみ**にしてください（余計な説明文は不要）。
 
@@ -440,9 +441,9 @@ def main():
     # 読み込んだ HTML ファイルの URL を明示的に付与して Slack/ファイルに埋め込む
     sources_lines = ["\n\n---\n## ソース"]
     for it in interviews:
-        sources_lines.append(f"- [大臣会見] {it.get('title','')} : {it.get('link','')}")
+        sources_lines.append(f"- <{it.get('link','')}|大臣会見: {it.get('title','')}>")
     for pr in press:
-        sources_lines.append(f"- [報道発表] {pr.get('title','')} : {pr.get('link','')}")
+        sources_lines.append(f"- <{pr.get('link','')}|報道発表: {pr.get('title','')}>")
 
     sources_md = "\n".join(sources_lines)
 
